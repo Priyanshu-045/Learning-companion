@@ -1,0 +1,10 @@
+{"domain":"web_dev","title":"Web Developer","nodes":[
+{"id":"html_css","name":"HTML and CSS Basics","prereqs":[],"hours":12,"resources":["MDN: Learn Web Development","freeCodeCamp: Responsive Web Design"]},
+{"id":"git_basics","name":"Git and GitHub Basics","prereqs":[],"hours":6,"resources":["Pro Git book","GitHub Skills"]},
+{"id":"js_basics","name":"JavaScript Basics","prereqs":["html_css"],"hours":20,"resources":["javascript.info","MDN: JavaScript Guide"]},
+{"id":"dom_events","name":"DOM and Events","prereqs":["js_basics"],"hours":8,"resources":["MDN: Introduction to the DOM","javascript.info"]},
+{"id":"react_basics","name":"React Fundamentals","prereqs":["js_basics","dom_events"],"hours":20,"resources":["React official docs (react.dev)","Scrimba: Learn React"]},
+{"id":"node_express","name":"Node.js and Express Basics","prereqs":["js_basics"],"hours":15,"resources":["Node.js official docs","Express official guide"]},
+{"id":"sql_db","name":"SQL and Databases","prereqs":[],"hours":10,"resources":["SQLBolt","PostgreSQL official tutorial"]},
+{"id":"deploy","name":"Deployment Basics","prereqs":["git_basics","node_express","sql_db"],"hours":6,"resources":["Vercel documentation","Render documentation"]}
+]}
