@@ -16,7 +16,7 @@
 - `companion/intake.py`: goal understanding in six languages (domain, weekly hours, known skills, scripted
   follow-up questions). Question strings and non-English keywords need native-speaker review.
 - Every plan records `generated_by` (model id). Ollama backend records its own eval stats.
-- Tests: `test_regression.py` (12), `test_models.py` (13), `test_intake.py` (12).
+- Tests: `test_regression.py` (12), `test_models.py` (10), `test_intake.py` (11).
 ### Changed
 - `MockLLM` moved to `companion/testing.py`; the `mock` backend needs `COMPANION_ALLOW_MOCK=1`.
 - CLI default backend is `ollama` with `llama3.2:1b`.
