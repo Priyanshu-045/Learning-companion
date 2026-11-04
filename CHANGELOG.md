@@ -1,5 +1,23 @@
 # Changelog
 
+## M2.1: Output Reliability (tests: 68 pass, fallback rate: 0/21)
+### Fixed
+- Roadmap schema inversion: moved `milestone` before `tasks` in `system_roadmap.txt`, eliminating token cutoffs and premature JSON closure in Llama 3.2 1B.
+- Safe minute parsing: `parse_minutes()` safely parses `"60"`, `"60 mins"`, `"1.5 hours"`, while strictly rejecting non-positive, non-finite, or ambiguous inputs.
+- Non-clamping day validation: rejects days outside 1-7 (0, 8, 9, -1) and triggers retry instead of silent corruption.
+- Anti-reinforcement retry messages: retry prompt no longer repeats malformed/truncated assistant outputs into context; provides clear schema reminder.
+- Trailing comma tolerance in `extract_json()`.
+- Key normalization: handles synonym keys (`weekly_milestone`, `milestone_goal`, `goal`, `project`) and list milestones.
+### Added
+- Localized fallback templates (`FALLBACK_TEMPLATES`) in `roadmap.py` supporting all 6 languages (`en`, `hi`, `mr`, `ta`, `te`, `bn`), all verified via `script_ok`.
+- Attempt tracking: records `"attempts"` count and `"source"` on each week (`source == "llm"` vs `"fallback"`).
+- CLI reliability reporting: shows first attempt, retry, and localized fallback metrics.
+- Tests: `test_reliability.py` with 18 tests covering minute parsing, day rejection without clamping, trailing commas, key normalization, all 6 localized fallbacks, attempt tracking, and retry message hygiene.
+### Verified
+- 68/68 Python tests passing (`test_core.py`: 17, `test_regression.py`: 12, `test_models.py`: 10, `test_intake.py`: 11, `test_reliability.py`: 18).
+- Live CLI run with Meta Llama 3.2 1B (Ollama): `python3 cli.py plan --domain ml_engineer --hours 5 --known python_basics --prompt "Plan my ML career"`.
+- Fallback rate dropped from baseline 6/21 (28.6%) down to **0/21 (0.0%)**, with **21/21 weeks succeeding on first attempt**.
+
 ## M1: Python engine hardening, Llama-only, intake (tests: 50 pass)
 ### Fixed
 - D1 `pack()` no longer hangs on weekly hours <= 0; hours must be finite and in (0, 100].

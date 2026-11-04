@@ -15,25 +15,66 @@ class ValidationError(ValueError):
 
 
 def extract_json(text):
-    t = re.sub(r"^```(?:json)?\s*|\s*```$", "", (text or "").strip())
+    t = (text or "").strip()
+    t = re.sub(r"^```(?:json)?\s*", "", t)
+    t = re.sub(r"\s*```$", "", t)
     a, b = t.find("{"), t.rfind("}")
     if a == -1 or b <= a:
         raise ValidationError("no JSON object found")
+    json_str = t[a:b + 1]
+    # Remove trailing commas before closing braces/brackets (common model syntax flaw)
+    clean_str = re.sub(r",\s*([}\]])", r"\1", json_str)
     try:
-        return json.loads(t[a:b + 1])
+        return json.loads(clean_str)
     except json.JSONDecodeError as e:
         raise ValidationError(f"invalid JSON: {e}")
 
 
-def _is_num(x):
-    return isinstance(x, (int, float)) and not isinstance(x, bool)
+def parse_minutes(mins):
+    """Safely parse numeric minute values. Reject ambiguous, non-positive, or non-finite values."""
+    if isinstance(mins, bool) or mins is None:
+        raise ValidationError("'minutes' must be a positive, finite number")
+    if isinstance(mins, (int, float)):
+        if not math.isfinite(mins) or mins <= 0:
+            raise ValidationError("'minutes' must be a positive, finite number")
+        return float(mins)
+    if isinstance(mins, str):
+        s = mins.strip().lower()
+        if not s:
+            raise ValidationError("'minutes' must be a positive, finite number")
+        # Hours: e.g. "1.5 hours", "2 hrs", "1 hour", "1.5 h"
+        m_hr = re.fullmatch(r"(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h)", s)
+        if m_hr:
+            val = float(m_hr.group(1)) * 60.0
+            if math.isfinite(val) and val > 0:
+                return val
+            raise ValidationError("'minutes' must be a positive, finite number")
+        # Minutes: e.g. "60", "60 mins", "60 min", "60 minutes", "60 m"
+        m_min = re.fullmatch(r"(\d+(?:\.\d+)?)\s*(?:minutes?|mins?|m)?", s)
+        if m_min:
+            val = float(m_min.group(1))
+            if math.isfinite(val) and val > 0:
+                return val
+            raise ValidationError("'minutes' must be a positive, finite number")
+    raise ValidationError("'minutes' must be a positive, finite number")
 
 
 def validate_week(obj, budget_minutes, allowed):
     """Strict schema check + deterministic clean-up (resource snapping, minutes rescaled to budget)."""
     if not isinstance(obj, dict):
         raise ValidationError("top level must be an object")
-    title, ms, tasks = obj.get("title"), obj.get("milestone"), obj.get("tasks")
+    norm = {k.strip().lower(): v for k, v in obj.items() if isinstance(k, str)}
+    title = obj.get("title") if "title" in obj else norm.get("title")
+    ms = obj.get("milestone") if "milestone" in obj else norm.get("milestone")
+    tasks = obj.get("tasks") if "tasks" in obj else norm.get("tasks")
+
+    if ms is None:
+        ms = norm.get("weekly_milestone") or norm.get("milestone_goal") or norm.get("goal") or norm.get("project")
+    if title is None:
+        title = norm.get("week_title") or norm.get("topic")
+
+    if isinstance(ms, list):
+        ms = " ".join(str(x).strip() for x in ms if str(x).strip())
     if not isinstance(title, str) or not title.strip():
         raise ValidationError("missing 'title'")
     if not isinstance(ms, str) or not ms.strip():
@@ -44,37 +85,90 @@ def validate_week(obj, budget_minutes, allowed):
     for t in tasks:
         if not isinstance(t, dict):
             raise ValidationError("each task must be an object")
-        day, text, mins, res = t.get("day"), t.get("task"), t.get("minutes"), t.get("resource")
+        text = t.get("task") or t.get("description") or t.get("activity")
+        mins_raw = t.get("minutes") if "minutes" in t else t.get("mins") if "mins" in t else t.get("duration")
+        res = t.get("resource") or t.get("resource_name")
+        day = t.get("day")
+        if isinstance(day, str) and day.strip().isdigit():
+            day = int(day.strip())
         if not (isinstance(day, int) and not isinstance(day, bool) and 1 <= day <= 7):
             raise ValidationError("'day' must be an integer 1-7")
         if not isinstance(text, str) or not text.strip():
             raise ValidationError("task text missing")
-        if not _is_num(mins) or not math.isfinite(mins) or mins <= 0:
-            raise ValidationError("'minutes' must be a positive, finite number")
+        mins = parse_minutes(mins_raw)
         if allowed and res not in allowed:
             res = allowed[0]  # never trust model-invented resources
-        clean.append({"day": day, "task": text.strip(), "minutes": float(mins), "resource": res or ""})
+        clean.append({"day": day, "task": text.strip(), "minutes": mins, "resource": res or ""})
     scale = budget_minutes / sum(t["minutes"] for t in clean)
     for t in clean:
         t["minutes"] = max(5, int(round(t["minutes"] * scale / 5)) * 5)
     clean.sort(key=lambda t: t["day"])
-    return {"title": title.strip(), "tasks": clean, "milestone": ms.strip()}
+    return {"title": title.strip(), "milestone": ms.strip(), "tasks": clean}
 
 
-def template_week(week, nodes):
-    """Last-resort deterministic week (English only) so the app never crashes or shows nothing."""
+FALLBACK_TEMPLATES = {
+    "en": {
+        "title": "Week {week}: {names}",
+        "study": "Study {name}",
+        "revise": "Revise {name}",
+        "milestone": "Finish the listed topics and note one question for each",
+    },
+    "hi": {
+        "title": "सप्ताह {week}: {names}",
+        "study": "{name} का अध्ययन करें",
+        "revise": "{name} का दोहराव करें",
+        "milestone": "सूचीबद्ध विषयों को पूरा करें और प्रत्येक के लिए एक प्रश्न नोट करें",
+    },
+    "mr": {
+        "title": "आठवडा {week}: {names}",
+        "study": "{name} चा अभ्यास करा",
+        "revise": "{name} ची उजळणी करा",
+        "milestone": "दिलेले विषय पूर्ण करा आणि प्रत्येकासाठी एक प्रश्न नोंदवा",
+    },
+    "ta": {
+        "title": "வாரம் {week}: {names}",
+        "study": "{name} கற்க",
+        "revise": "{name} திருப்புதல் செய்க",
+        "milestone": "பட்டியலிடப்பட்ட தலைப்புகளை முடித்து ஒவ்வொன்றிற்கும் ஒரு குறிப்பை எழுதவும்",
+    },
+    "te": {
+        "title": "వారం {week}: {names}",
+        "study": "{name} అధ్యయనం చేయండి",
+        "revise": "{name} పునశ్చరణ చేయండి",
+        "milestone": "జాబితా చేయబడిన అంశాలను పూర్తి చేసి ప్రతిదానికి ఒక ప్రశ్న రాయండి",
+    },
+    "bn": {
+        "title": "সপ্তাহ {week}: {names}",
+        "study": "{name} অধ্যয়ন করুন",
+        "revise": "{name} পুনরাবৃত্তি করুন",
+        "milestone": "তালিকাভুক্ত বিষয়গুলি শেষ করুন এবং প্রতিটির জন্য একটি প্রশ্ন লিখুন",
+    },
+}
+
+
+def template_week(week, nodes, lang="en"):
+    """Deterministic fallback week localized to the requested language so the app never crashes."""
+    tmpl = FALLBACK_TEMPLATES.get(lang, FALLBACK_TEMPLATES["en"])
     tasks, k = [], 0
     for it in week["items"]:
         n = nodes[it["node"]]
         total = it["hours"] * 60
         sessions = max(1, math.ceil(total / 60))
         for _ in range(sessions):
-            tasks.append({"day": k % 5 + 1, "task": ("Revise " if it["revision"] else "Study ") + n["name"],
-                          "minutes": int(round(total / sessions / 5)) * 5 or 5, "resource": n["resources"][0]})
+            action = tmpl["revise"] if it["revision"] else tmpl["study"]
+            tasks.append({
+                "day": k % 5 + 1,
+                "task": action.format(name=n["name"]),
+                "minutes": int(round(total / sessions / 5)) * 5 or 5,
+                "resource": n["resources"][0],
+            })
             k += 1
     names = ", ".join(nodes[i["node"]]["name"] for i in week["items"])
-    return {"title": f"Week {week['week']}: {names}", "tasks": tasks,
-            "milestone": "Finish the listed topics and note one question for each"}
+    return {
+        "title": tmpl["title"].format(week=week["week"], names=names),
+        "milestone": tmpl["milestone"],
+        "tasks": tasks,
+    }
 
 
 def fill_week(llm, graph, week, meta, attempts=2):
@@ -94,7 +188,7 @@ def fill_week(llm, graph, week, meta, attempts=2):
     messages = [{"role": "system", "content": SYSTEM_ROADMAP.replace("{LANGUAGE_NAME}", LANG_NAMES[lang])},
                 {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}]
     err = None
-    for _ in range(attempts):
+    for attempt in range(1, attempts + 1):
         raw = ""
         try:
             raw = llm.chat(messages)
@@ -104,15 +198,26 @@ def fill_week(llm, graph, week, meta, attempts=2):
                 text = text.replace(term, " ")  # English topic names / resource titles are allowed technical terms
             if not script_ok(text, lang):
                 raise ValidationError(f"all text values must be written only in {LANG_NAMES[lang]}")
-            return {**week, **data, "source": "llm"}
+            return {**week, **data, "source": "llm", "attempts": attempt}
         except ValidationError as e:
             err = e
-            messages += [{"role": "assistant", "content": raw},
-                         {"role": "user", "content": f"Invalid output: {e}. Return only the corrected JSON object."}]
+            # Do NOT reinforce broken output by appending malformed raw text.
+            # Give clear corrective instruction with schema reminder.
+            messages = [
+                messages[0],
+                messages[1],
+                {"role": "assistant", "content": "I understand the JSON formatting and schema requirements."},
+                {"role": "user", "content": (
+                    f"Your previous output failed validation: {e}. "
+                    "Return ONLY a single valid JSON object. "
+                    'Schema: {"title": string, "milestone": string, "tasks": [{"day": 1-7, "task": string, "minutes": integer, "resource": string}]}. '
+                    f"Ensure 'milestone' is present, 'day' is 1-7, 'minutes' is a positive integer, and all text is in {LANG_NAMES[lang]}."
+                )},
+            ]
         except Exception as e:  # backend failure (model not loaded, server down...)
             err = e
-            break
-    return {**week, **template_week(week, nodes), "source": "fallback", "error": str(err)}
+            return {**week, **template_week(week, nodes, lang), "source": "fallback", "attempts": attempt, "error": str(err)}
+    return {**week, **template_week(week, nodes, lang), "source": "fallback", "attempts": attempts, "error": str(err)}
 
 
 def build_plan(llm, domain, weekly_hours, known, lang):

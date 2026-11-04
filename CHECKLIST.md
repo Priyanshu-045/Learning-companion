@@ -15,8 +15,9 @@
 - [x] Gap analysis, weekly packing, adaptation rules, quiz generation
 - [x] JSON validation, retry, fallback, input validation
 - [x] Regression tests for D1-D9
+- [x] Output reliability & safe minute/day parsing (M2.1)
+- [x] Localized deterministic fallback templates in 6 languages (M2.1)
 - [ ] Multilingual quality evaluation on a real Llama (M2)
-- [ ] Translated fallback week (M5/M8)
 
 ## Android
 - [~] Kotlin port of logic (uncompiled)

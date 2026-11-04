@@ -28,16 +28,32 @@ def show(plan):
     print(f"\nModel: {plan.get('generated_by', 'unknown')}")
     print(f"Goal: {plan['goal']} | {plan['weekly_hours']} h/week | language: {LANG_NAMES[plan['language']]}")
     print(f"Skill gaps: {', '.join(plan['skill_gaps']) or 'none'}")
+    first_try, retried, fb_count = 0, 0, 0
     for w in plan["weeks"]:
-        tag = "" if w["source"] == "llm" else f"  [{w['source']}]"
+        src = w.get("source", "unknown")
+        attempts = w.get("attempts", 1)
+        if src == "llm":
+            if attempts > 1:
+                retried += 1
+                tag = f"  [retry {attempts}]"
+            else:
+                first_try += 1
+                tag = ""
+        else:
+            fb_count += 1
+            tag = f"  [{src}]"
         sc = f"  (quiz {w['score']:.0%})" if "score" in w else ""
         print(f"\n#{w['week']}  {w['title']}{sc}{tag}")
         for t in w["tasks"]:
             print(f"  Day {t['day']}  {t['minutes']:>3} min  {t['task']}  <{t['resource']}>")
         print(f"  Milestone: {w['milestone']}")
     fb = [w for w in plan["weeks"] if w["source"] != "llm"]
+    total_w = len(plan["weeks"])
+    if total_w > 0:
+        print(f"\nReliability: {first_try}/{total_w} first attempt, {retried}/{total_w} on retry, {fb_count}/{total_w} fallback")
     if fb:
-        print(f"\nWARNING: {len(fb)}/{len(plan['weeks'])} weeks used the English template fallback, not the model. "
+        lang_name = LANG_NAMES.get(plan.get("language", "en"), "template")
+        print(f"\nWARNING: {len(fb)}/{total_w} weeks used the {lang_name} template fallback, not the model. "
               f"First error: {fb[0].get('error')}")
     for a in plan.get("adaptations", []):
         print(f"\nAdaptation: week {a['week']} scored {a['score']:.0%} -> {a['action']}")

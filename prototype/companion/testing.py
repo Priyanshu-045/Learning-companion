@@ -29,8 +29,8 @@ class MockLLM:
                                   "resource": p["allowed_resources"][0]})
                     day = day % 5 + 1
             names = ", ".join(f["name"] for f in p["focus"])
-            return json.dumps({"title": f"{week_w} {p['week']}: {names}", "tasks": tasks,
-                               "milestone": f"{goal_w}: {names}"}, ensure_ascii=False)
+            return json.dumps({"title": f"{week_w} {p['week']}: {names}", "milestone": f"{goal_w}: {names}",
+                               "tasks": tasks}, ensure_ascii=False)
         if "topic" in p:
             qs = [{"q": f"{study_w} {p['topic']} #{i + 1}?", "options": ["A", "B", "C", "D"], "answer_index": i % 4}
                   for i in range(p.get("count", 5))]
