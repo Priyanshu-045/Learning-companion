@@ -4,7 +4,7 @@ import math
 import re
 
 from .lang import LANG_NAMES, script_ok
-from .planner import SHARED, load_graph, find_gaps, pack, remaining_queue, adapt_queue
+from .planner import SHARED, load_graph, find_gaps, pack, remaining_queue, adapt_queue, validate_hours
 
 SYSTEM_ROADMAP = (SHARED / "prompts" / "system_roadmap.txt").read_text(encoding="utf-8")
 SYSTEM_QUIZ = (SHARED / "prompts" / "system_quiz.txt").read_text(encoding="utf-8")
@@ -49,8 +49,8 @@ def validate_week(obj, budget_minutes, allowed):
             raise ValidationError("'day' must be an integer 1-7")
         if not isinstance(text, str) or not text.strip():
             raise ValidationError("task text missing")
-        if not _is_num(mins) or mins <= 0:
-            raise ValidationError("'minutes' must be a positive number")
+        if not _is_num(mins) or not math.isfinite(mins) or mins <= 0:
+            raise ValidationError("'minutes' must be a positive, finite number")
         if allowed and res not in allowed:
             res = allowed[0]  # never trust model-invented resources
         clean.append({"day": day, "task": text.strip(), "minutes": float(mins), "resource": res or ""})
@@ -116,11 +116,19 @@ def fill_week(llm, graph, week, meta, attempts=2):
 
 
 def build_plan(llm, domain, weekly_hours, known, lang):
+    if lang not in LANG_NAMES:
+        raise ValueError(f"unsupported language '{lang}'. Supported: {', '.join(LANG_NAMES)}")
+    weekly_hours = validate_hours(weekly_hours)
     graph = load_graph(domain)
+    unknown = sorted(set(known) - {n["id"] for n in graph["nodes"]})
+    if unknown:
+        raise ValueError(f"unknown skill id(s) for {domain}: {', '.join(unknown)}")
     gaps = find_gaps(graph, known)
     nodes = {n["id"]: n for n in graph["nodes"]}
     meta = {"domain": domain, "goal": graph["title"], "language": lang, "weekly_hours": weekly_hours,
-            "known": sorted(known), "skill_gaps": gaps, "adaptations": []}
+            "known": sorted(known), "skill_gaps": gaps, "adaptations": [],
+            "status": "active" if gaps else "complete",
+            "generated_by": getattr(llm, "model_id", "unknown")}
     queue = [{"node": g, "hours": nodes[g]["hours"], "revision": False} for g in gaps]
     return {**meta, "weeks": [fill_week(llm, graph, w, meta) for w in pack(queue, weekly_hours)]}
 
@@ -128,8 +136,16 @@ def build_plan(llm, domain, weekly_hours, known, lang):
 def adapt_plan(llm, plan, week_no, score):
     """Record a weekly quiz score; deterministically re-plan later weeks; LLM only re-fills them."""
     weeks = plan["weeks"]
+    if not weeks:
+        raise ValueError("this plan has no weeks to adapt (all skills were already known)")
+    if isinstance(score, bool) or not isinstance(score, (int, float)) or not 0.0 <= score <= 1.0:
+        raise ValueError(f"score must be a number between 0 and 1, got {score!r}")
     if not 1 <= week_no <= len(weeks):
         raise ValueError(f"week must be 1..{len(weeks)}")
+    if any("score" not in w for w in weeks[:week_no - 1]):
+        raise ValueError(f"record the quiz for earlier weeks first (weeks are adapted in order)")
+    if "score" in weeks[week_no - 1]:
+        raise ValueError(f"week {week_no} already has a recorded score")
     graph = load_graph(plan["domain"])
     done = [dict(w) for w in weeks[:week_no]]
     done[-1]["score"] = score
@@ -161,7 +177,10 @@ def generate_quiz(llm, topic, lang, count=5, attempts=2):
                                                        ensure_ascii=False)}]
     err = None
     for _ in range(attempts):
-        raw = llm.chat(messages)
+        try:
+            raw = llm.chat(messages)
+        except Exception as e:
+            raise ValidationError(f"quiz generation failed: model backend error: {e}")
         try:
             qs = validate_quiz(extract_json(raw), count)
             if not script_ok(" ".join(q["q"] for q in qs), lang):

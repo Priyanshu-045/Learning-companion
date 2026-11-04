@@ -4,6 +4,16 @@ import pathlib
 
 SHARED = pathlib.Path(__file__).resolve().parents[2] / "shared"
 EPS = 0.01
+MAX_WEEKLY_HOURS = 100
+
+
+def validate_hours(h):
+    """Weekly study hours must be a finite number in (0, 100]. (0 or negative used to hang pack() forever.)"""
+    if isinstance(h, bool) or not isinstance(h, (int, float)) or h != h or h in (float("inf"), float("-inf")):
+        raise ValueError(f"weekly hours must be a number, got {h!r}")
+    if not 0 < h <= MAX_WEEKLY_HOURS:
+        raise ValueError(f"weekly hours must be between 0 and {MAX_WEEKLY_HOURS}, got {h}")
+    return float(h)
 
 
 def list_domains():
@@ -48,7 +58,8 @@ def known_from_quiz(graph, scores, threshold=0.6):
 
 def pack(queue, weekly_hours, start_week=1):
     """Pack queue items [{'node','hours','revision'}] into weeks; long items span weeks."""
-    weeks, cur, room, week = [], [], float(weekly_hours), start_week
+    weekly_hours = validate_hours(weekly_hours)
+    weeks, cur, room, week = [], [], weekly_hours, start_week
     for item in queue:
         left = float(item["hours"])
         while left > EPS:
@@ -59,7 +70,7 @@ def pack(queue, weekly_hours, start_week=1):
             room -= take
             if room < EPS:
                 weeks.append({"week": week, "items": cur})
-                week, cur, room = week + 1, [], float(weekly_hours)
+                week, cur, room = week + 1, [], weekly_hours
     if cur:
         weeks.append({"week": week, "items": cur})
     return weeks

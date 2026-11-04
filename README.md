@@ -6,45 +6,34 @@ prototype/     Python desktop prototype (tested, zero dependencies) — build/tu
 android/       Kotlin core logic + ExecuTorch engine wrapper (to drop into the ExecuTorch Llama demo app)
 ```
 
-## Part A — Run the prototype on your computer (5 minutes)
+## Part A: Run the Python engine on your computer
 
-Needs only Python 3.10+. No pip installs.
+Needs Python 3.10+, no pip installs. Models: **Meta Llama only** (default `llama3.2:1b`).
 
 ```bash
 cd learning-companion/prototype
-
-# 1. Run the tests (should print "OK", 17 tests)
-python3 -m unittest discover -s tests -v
-
-# 2. Full pipeline with the built-in mock model (no download)
-python3 cli.py domains
-python3 cli.py plan --domain ml_engineer --hours 5 --known python_basics --prompt "Plan my ML career"
-python3 cli.py adapt --week 1 --score 0.4      # fail a quiz -> revision week inserted, later weeks shift
-python3 cli.py adapt --week 2 --score 0.95     # ace a quiz  -> next topic shortened
-python3 cli.py show
-
-# 3. Regional language (language auto-detected from the prompt)
-python3 cli.py plan --domain data_analysis --hours 6 --prompt "मुझे 1 महीने का डेटा साइंस प्लान चाहिए"
-python3 cli.py quiz --topic "NumPy and Pandas" --lang ta
+python3 -m unittest discover -s tests          # expect: 50 tests, OK
 ```
-On Windows use `python` instead of `python3`.
 
-### Use a real Llama model on your PC (prompt/JSON tuning)
-1. Install Ollama from https://ollama.com
-2. `ollama pull llama3.2:1b`
-3. `python3 cli.py plan --backend ollama --domain ml_engineer --hours 5 --prompt "Plan my ML career"`
+### With a real Llama model (needed for real output)
+1. Install Ollama from https://ollama.com, then `ollama pull llama3.2:1b`
+2. ```bash
+   python3 cli.py intake --text "I want to become an ML engineer, 5 hours a week"
+   python3 cli.py plan --domain ml_engineer --hours 5 --known python_basics --prompt "Plan my ML career"
+   python3 cli.py adapt --week 1 --score 0.4      # weeks are scored in order
+   python3 cli.py plan --domain data_analysis --hours 6 --prompt "मुझे 1 महीने का डेटा साइंस प्लान चाहिए"
+   python3 cli.py quiz --topic "NumPy and Pandas" --lang ta
+   ```
+Other backends: `--backend llamacpp --model path/to/Llama-3.2-1B-Instruct-Q4_K_M.gguf`. Non-Llama models are refused.
+Your own Llama fine-tune needs `--llama-derivative`.
 
-Look at the `[fallback]` tag in the output: it marks weeks where the model failed validation twice.
-That fallback rate (and the Hindi/Tamil/Telugu/Bengali/Marathi pass rate) is your first real quality metric.
-The mock backend does NOT translate; it only proves the pipeline. Real regional-language quality
-needs the model (and later the LoRA fine-tune).
+If the model server is down, the CLI prints a WARNING and shows English template weeks, which are not model output.
 
-State is saved to `companion_state.json` in the folder you run from.
+### Pipeline smoke test without a model (tests only)
+`COMPANION_ALLOW_MOCK=1 python3 cli.py plan --backend mock --domain web_dev --hours 8`
+The mock is not a Llama model and is never valid for the demo or the report.
 
-### Add a new domain
-Copy `shared/skill_graphs/web_dev.json`, edit nodes (id, name, prereqs, hours, resources), save. It shows up in
-`cli.py domains` automatically; `tests` will check it has no cycles and every prereq exists.
-Use real resource *titles* only (no invented URLs).
+See `AUDIT.md` (findings and plan), `CHANGELOG.md`, `CHECKLIST.md` (what is verified vs not).
 
 ## Part B — Android (on-device ExecuTorch)
 

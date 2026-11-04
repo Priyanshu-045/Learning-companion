@@ -1,3 +1,9 @@
+> **WARNING (audit K8): parts of this guide are stale and will be rewritten in Milestone M3.**
+> Per the ExecuTorch main docs (checked Nov 2026, NOT yet run by us): the Llama demo app lives in the
+> `meta-pytorch/executorch-examples` repo, not `examples/demo-apps` in the ExecuTorch repo, and LLM export
+> uses `python -m executorch.extension.llm.export.export_llm`. Also `load()` returns a status code and
+> `LlmCallback` has an `onError` method. Follow the current docs, not the commands below, until M3 lands.
+
 # Android: run Llama on-device with ExecuTorch
 
 Status: the Kotlin files in `core/` are a direct port of the tested Python logic but have NOT been compiled

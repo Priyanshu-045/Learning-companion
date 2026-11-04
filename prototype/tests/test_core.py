@@ -2,7 +2,7 @@ import json
 import unittest
 
 from companion.lang import detect_language, script_ok
-from companion.llm import MockLLM
+from companion.testing import MockLLM
 from companion.planner import load_graph, find_gaps, topo_order, pack, list_domains
 from companion.roadmap import (build_plan, adapt_plan, extract_json, validate_week, ValidationError,
                                generate_quiz)

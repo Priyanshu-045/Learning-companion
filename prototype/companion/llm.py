@@ -1,31 +1,47 @@
-"""LLM backends. All expose chat(messages) -> str (messages = [{'role','content'}])."""
+"""LLM backends for DESKTOP development. All are Llama-family only (see models.py).
+The on-device runtime is ExecuTorch (android/); these are for prompt/JSON tuning on a PC.
+All expose chat(messages) -> str, plus `.family` and `.model_id` (recorded in every plan)."""
 import json
+import os
 import urllib.request
 
-from .lang import LANG_NAMES
+from .models import check_ollama_model, check_gguf
+
+DEFAULT_MODEL = "llama3.2:1b"  # Meta Llama 3.2 1B Instruct (Ollama default tag is the instruct build)
 
 
 class OllamaLLM:
-    """Desktop testing with a local Ollama server (https://ollama.com). NOT the on-device runtime."""
+    family = "llama"
 
-    def __init__(self, model="llama3.2:1b", host="http://localhost:11434", temperature=0.3, num_predict=700):
+    def __init__(self, model=DEFAULT_MODEL, host="http://localhost:11434", temperature=0.3, num_predict=700,
+                 allow_derivative=False):
+        self.kind = check_ollama_model(model, allow_derivative)
         self.model, self.host, self.temperature, self.num_predict = model, host, temperature, num_predict
+        self.model_id = f"ollama:{model} ({self.kind})"
+        self.last_stats = {}
 
     def chat(self, messages):
         body = json.dumps({"model": self.model, "messages": messages, "stream": False, "format": "json",
                            "options": {"temperature": self.temperature, "num_predict": self.num_predict}}).encode()
         req = urllib.request.Request(self.host + "/api/chat", body, {"Content-Type": "application/json"})
         with urllib.request.urlopen(req, timeout=300) as r:
-            return json.loads(r.read())["message"]["content"]
+            data = json.loads(r.read())
+        # Ollama reports eval_count / eval_duration(ns): real decode speed on THIS machine (not the phone).
+        self.last_stats = {k: data.get(k) for k in ("eval_count", "eval_duration", "prompt_eval_count",
+                                                     "prompt_eval_duration", "total_duration")}
+        return data["message"]["content"]
 
 
 class LlamaCppLLM:
-    """Desktop testing with llama-cpp-python and any GGUF file: pip install llama-cpp-python"""
+    """llama-cpp-python with a Llama GGUF (architecture + name checked before loading)."""
+    family = "llama"
 
-    def __init__(self, gguf_path, temperature=0.3, max_tokens=700, n_ctx=2048):
-        from llama_cpp import Llama
+    def __init__(self, gguf_path, temperature=0.3, max_tokens=700, n_ctx=2048, allow_derivative=False):
+        self.kind = check_gguf(gguf_path, allow_derivative)
+        from llama_cpp import Llama  # pip install llama-cpp-python
         self.llm = Llama(model_path=gguf_path, n_ctx=n_ctx, verbose=False)
         self.temperature, self.max_tokens = temperature, max_tokens
+        self.model_id = f"gguf:{os.path.basename(gguf_path)} ({self.kind})"
 
     def chat(self, messages):
         out = self.llm.create_chat_completion(messages=messages, temperature=self.temperature,
@@ -33,47 +49,17 @@ class LlamaCppLLM:
         return out["choices"][0]["message"]["content"]
 
 
-# Words used by the mock so regional-language demos pass the script check (NOT real translation).
-_MOCK_WORDS = {"en": ("Week", "Study", "Goal"), "hi": ("सप्ताह", "अध्ययन", "लक्ष्य"),
-               "mr": ("आठवडा", "अभ्यास", "ध्येय"), "ta": ("வாரம்", "கற்றல்", "இலக்கு"),
-               "te": ("వారం", "అభ్యాసం", "లక్ష్యం"), "bn": ("সপ্তাহ", "অধ্যয়ন", "লক্ষ্য")}
-
-
-class MockLLM:
-    """Rule-based stand-in so the whole pipeline runs with no model. Reads the JSON payload
-    in the last user message and returns schema-valid JSON."""
-
-    def chat(self, messages):
-        first_user = next((m["content"] for m in messages if m["role"] == "user"), "{}")
-        p = json.loads(first_user)
-        week_w, study_w, goal_w = _MOCK_WORDS[p.get("language", "en")]
-        if p.get("task") == "fill_week":
-            tasks, day = [], 1
-            for f in p["focus"]:
-                total = f["hours"] * 60
-                sessions = max(1, -(-int(total) // 60))
-                for _ in range(sessions):
-                    label = f["name"] + (" (revision)" if f["revision"] else "")
-                    tasks.append({"day": day, "task": f"{study_w}: {label}", "minutes": int(total / sessions),
-                                  "resource": p["allowed_resources"][0]})
-                    day = day % 5 + 1
-            names = ", ".join(f["name"] for f in p["focus"])
-            return json.dumps({"title": f"{week_w} {p['week']}: {names}", "tasks": tasks,
-                               "milestone": f"{goal_w}: {names}"}, ensure_ascii=False)
-        if "topic" in p:
-            qs = [{"q": f"{study_w} {p['topic']} #{i + 1}?", "options": ["A", "B", "C", "D"], "answer_index": i % 4}
-                  for i in range(p.get("count", 5))]
-            return json.dumps({"questions": qs}, ensure_ascii=False)
-        return "{}"
-
-
-def make_llm(backend, model=None):
-    if backend == "mock":
-        return MockLLM()
+def make_llm(backend, model=None, allow_derivative=False):
     if backend == "ollama":
-        return OllamaLLM(model or "llama3.2:1b")
+        return OllamaLLM(model or DEFAULT_MODEL, allow_derivative=allow_derivative)
     if backend == "llamacpp":
         if not model:
-            raise ValueError("--model must be a path to a .gguf file for the llamacpp backend")
-        return LlamaCppLLM(model)
+            raise ValueError("--model must be a path to a Llama .gguf file for the llamacpp backend")
+        return LlamaCppLLM(model, allow_derivative=allow_derivative)
+    if backend == "mock":
+        if os.environ.get("COMPANION_ALLOW_MOCK") != "1":
+            raise ValueError("the mock backend is for unit tests only (not a Llama model). "
+                             "Set COMPANION_ALLOW_MOCK=1 to run a pipeline smoke test.")
+        from .testing import MockLLM
+        return MockLLM()
     raise ValueError(f"unknown backend {backend}")
