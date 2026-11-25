@@ -1,0 +1,12 @@
+{"domain":"ml_engineer","title":"Machine Learning Engineer","nodes":[
+{"id":"python_basics","name":"Python Basics","prereqs":[],"hours":12,"resources":["Python official tutorial","CS50P (Harvard)"]},
+{"id":"linear_algebra","name":"Linear Algebra Refresher","prereqs":[],"hours":8,"resources":["3Blue1Brown: Essence of Linear Algebra","Khan Academy: Linear Algebra"]},
+{"id":"prob_stats","name":"Probability and Statistics","prereqs":[],"hours":10,"resources":["Khan Academy: Statistics and Probability","StatQuest (YouTube)"]},
+{"id":"numpy_pandas","name":"NumPy and Pandas","prereqs":["python_basics"],"hours":8,"resources":["NumPy official quickstart","Pandas official 10 minutes guide"]},
+{"id":"calculus_opt","name":"Calculus and Optimization Basics","prereqs":["linear_algebra"],"hours":6,"resources":["3Blue1Brown: Essence of Calculus","Khan Academy: Calculus"]},
+{"id":"ml_fundamentals","name":"Machine Learning Fundamentals","prereqs":["numpy_pandas","prob_stats"],"hours":20,"resources":["Andrew Ng: Machine Learning Specialization","scikit-learn user guide"]},
+{"id":"pytorch_basics","name":"PyTorch Fundamentals","prereqs":["python_basics","numpy_pandas","calculus_opt"],"hours":12,"resources":["PyTorch official tutorials","fast.ai: Practical Deep Learning"]},
+{"id":"deep_learning","name":"Deep Learning Basics","prereqs":["ml_fundamentals","pytorch_basics"],"hours":20,"resources":["fast.ai: Practical Deep Learning","Andrej Karpathy: Neural Networks: Zero to Hero"]},
+{"id":"quantization","name":"Model Quantization and Optimization","prereqs":["deep_learning"],"hours":10,"resources":["PyTorch quantization documentation","ExecuTorch documentation"]},
+{"id":"ondevice_deploy","name":"On-Device Deployment with ExecuTorch","prereqs":["quantization"],"hours":10,"resources":["ExecuTorch documentation","Android developer guides"]}
+]}

@@ -23,14 +23,24 @@ class MockLLM:
             for f in p["focus"]:
                 total = f["hours"] * 60
                 sessions = max(1, -(-int(total) // 60))
-                for _ in range(sessions):
+                node_res = f.get("allowed_resources", f.get("resources", p.get("allowed_resources", ["Resource"])))
+                res = node_res[0] if node_res else p["allowed_resources"][0]
+                for s_idx in range(sessions):
                     label = f["name"] + (" (revision)" if f["revision"] else "")
-                    tasks.append({"day": day, "task": f"{study_w}: {label}", "minutes": int(total / sessions),
-                                  "resource": p["allowed_resources"][0]})
+                    tasks.append({
+                        "day": day,
+                        "node": f["node"],
+                        "task": f"{study_w}: {label} - Session {s_idx + 1}",
+                        "minutes": int(total / sessions),
+                        "resource": res,
+                    })
                     day = day % 5 + 1
             names = ", ".join(f["name"] for f in p["focus"])
-            return json.dumps({"title": f"{week_w} {p['week']}: {names}", "milestone": f"{goal_w}: {names}",
-                               "tasks": tasks}, ensure_ascii=False)
+            return json.dumps({
+                "title": f"{week_w} {p['week']}: {names}",
+                "milestone": f"{goal_w} {p.get('week', 1)}: {names}",
+                "tasks": tasks,
+            }, ensure_ascii=False)
         if "topic" in p:
             qs = [{"q": f"{study_w} {p['topic']} #{i + 1}?", "options": ["A", "B", "C", "D"], "answer_index": i % 4}
                   for i in range(p.get("count", 5))]

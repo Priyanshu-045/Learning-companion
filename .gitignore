@@ -17,6 +17,15 @@ venv/
 # Android / Gradle
 .gradle/
 **/build/
+local.properties
+**/local.properties
+*.apk
+*.ap_
+*.aab
+*.dex
+.externalNativeBuild/
+.cxx/
+captures/
 
 # Node.js
 node_modules/

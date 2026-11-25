@@ -22,11 +22,22 @@ DOMAIN_KEYWORDS = {
 
 HOUR_WORDS = ["hour", "hr", "घंटे", "घंटा", "घण्टे", "तास", "மணி", "గంట", "ঘণ্টা", "ঘন্টা"]
 DAY_WORDS = ["day", "daily", "दिन", "रोज", "தினம்", "రోజు", "দিন"]
-KNOW_CUES = ["know", "knew", "already", "familiar", "experience", "comfortable", "learned", "learnt", "studied",
-             "completed", "finished", "good at", "आता है", "आती है", "पता है", "जानता", "जानती", "पहले से",
-             "सीख चुका", "सीख चुकी"]
-WANT_CUES = ["want", "wish", "need", "learn", "planning", "plan to", "interested", "start", "beginner",
-             "new to", "सीखना", "चाहता", "चाहती", "चाहिए"]
+KNOW_CUES = [
+    "know", "knew", "already", "familiar", "experience", "comfortable", "learned", "learnt", "studied",
+    "completed", "finished", "good at", "आता है", "आती है", "पता है", "जानता", "जानती", "पहले से",
+    "सीख चुका", "सीख चुकी", "येते", "येतात", "माहित आहे", "आधीच", "शिकलो", "शिकले",
+    "தெரியும்", "கற்றுக்கொண்டேன்", "முடித்தேன்", "அறிவேன்",
+    "తెలుసు", "నేర్చుకున్నాను", "పూర్తిచేశాను", "వచ్చు",
+    "জানি", "জানা আছে", "শিখেছি", "পড়েছি", "সম্পন্ন"
+]
+WANT_CUES = [
+    "want", "wish", "need", "learn", "planning", "plan to", "interested", "start", "beginner",
+    "new to", "सीखना", "चाहता", "चाहती", "चाहिए",
+    "शिकायचे", "शिकायचं", "पाहिजे", "करायचे", "करायचं",
+    "கற்க வேண்டும்", "படிக்க வேண்டும்", "விருப்பம்", "ஆரம்பிக்க",
+    "నేర్చుకోవాలి", "కావాలి", "చదవాలి",
+    "শিখতে চাই", "পড়তে চাই", "দরকার", "প্রয়োজন"
+]
 NEGATIONS = ["don't know", "do not know", "dont know", "no idea", "not familiar", "never"]
 _STOP = {"and", "basics", "fundamentals", "with", "of", "to", "the", "refresher", "introduction", "on-device"}
 
@@ -119,10 +130,16 @@ def extract_known(text, domain, answering=False):
                         known.add(nid)
                     continue
                 before = clause[:m.start()]
-                k = max([before.rfind(c) for c in KNOW_CUES], default=-1)
-                w = max([before.rfind(c) for c in WANT_CUES + ["wantcue"] if not (c == "learn")]
-                        + [mm.start() for mm in re.finditer(r"learn(?!ed|t)", before)], default=-1)
-                if k > w and k >= 0:
+                after = clause[m.end():]
+                k_before = max([before.rfind(c) for c in KNOW_CUES], default=-1)
+                w_before = max([before.rfind(c) for c in WANT_CUES + ["wantcue"] if not (c == "learn")]
+                               + [mm.start() for mm in re.finditer(r"learn(?!ed|t)", before)], default=-1)
+                k_after = any(c in after for c in KNOW_CUES)
+                w_after = any(c in after for c in WANT_CUES + ["wantcue"])
+
+                if k_before > w_before and k_before >= 0:
+                    known.add(nid)
+                elif k_after and not w_after and w_before < 0:
                     known.add(nid)
     return sorted(known)
 

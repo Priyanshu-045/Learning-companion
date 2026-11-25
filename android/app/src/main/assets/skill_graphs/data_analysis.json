@@ -1,0 +1,10 @@
+{"domain":"data_analysis","title":"Data Analyst","nodes":[
+{"id":"spreadsheets","name":"Spreadsheet Fundamentals","prereqs":[],"hours":8,"resources":["Microsoft Excel training","Google Sheets training and help"]},
+{"id":"sql_basics","name":"SQL Fundamentals","prereqs":[],"hours":10,"resources":["SQLBolt","Mode: SQL Tutorial"]},
+{"id":"python_basics","name":"Python Basics","prereqs":[],"hours":12,"resources":["Python official tutorial","CS50P (Harvard)"]},
+{"id":"stats_basics","name":"Descriptive and Inferential Statistics","prereqs":[],"hours":12,"resources":["Khan Academy: Statistics and Probability","StatQuest (YouTube)"]},
+{"id":"pandas_analysis","name":"Data Analysis with Pandas","prereqs":["python_basics"],"hours":14,"resources":["Pandas official documentation","Kaggle Learn: Pandas"]},
+{"id":"data_viz","name":"Data Visualization","prereqs":["pandas_analysis"],"hours":8,"resources":["Kaggle Learn: Data Visualization","Matplotlib official tutorials"]},
+{"id":"dashboards","name":"Dashboards and Storytelling","prereqs":["data_viz","sql_basics"],"hours":8,"resources":["Power BI documentation","Tableau Public learning resources"]},
+{"id":"capstone","name":"Portfolio Project","prereqs":["stats_basics","dashboards"],"hours":12,"resources":["Kaggle Datasets","Kaggle Learn: Data Cleaning"]}
+]}
